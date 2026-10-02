@@ -67,6 +67,158 @@ function caseRow(x){
     </div>
   `;
 }
+function drawClients(){
+  shell(`
+    <div class="section">
+      <div>
+        <h2>Clients</h2>
+        <div class="muted">તમારા બધા clients</div>
+      </div>
+      <button class="primary" onclick="openClient()">+ New Client</button>
+    </div>
+
+    <div class="list">
+      ${state.clients.map(x=>`
+        <div class="card row">
+          <div>
+            <b>${esc(x.name||'')}</b>
+            <div class="muted">${esc(x.phone||'')}</div>
+            <div class="muted">${esc(x.address||'')}</div>
+          </div>
+          <button onclick="openClient('${x.id}')">Edit</button>
+        </div>
+      `).join('') || '<div class="card empty">No clients yet</div>'}
+    </div>
+  `);
+}
+function drawCases(){
+  shell(`
+    <div class="section">
+      <div>
+        <h2>NA Cases</h2>
+        <div class="muted">તમારા બધા NA cases</div>
+      </div>
+      <button class="primary" onclick="openCase()">+ New Case</button>
+    </div>
+
+    <div class="list">
+      ${state.cases.map(x=>caseRow(x)).join('')
+        || '<div class="card empty">No cases yet</div>'}
+    </div>
+  `);
+}
+function drawPayments(){
+  const income=state.transactions
+    .filter(x=>x.transaction_type==='income')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  const expense=state.transactions
+    .filter(x=>x.transaction_type==='expense')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  shell(`
+    <div class="section">
+      <div>
+        <h2>Payments</h2>
+        <div class="muted">Income & Expense</div>
+      </div>
+      <button class="primary" onclick="openTxn()">+ Add Payment</button>
+    </div>
+
+    <div class="grid">
+      <div class="card stat">
+        <span class="muted">Income</span>
+        <b>${money(income)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Expense</span>
+        <b>${money(expense)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Balance</span>
+        <b>${money(income-expense)}</b>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Payments</h2>
+    </div>
+
+    <div class="list">
+      ${state.transactions.map(x=>`
+        <div class="card row">
+          <div>
+            <b>${x.transaction_type==='income'?'+':'-'}${money(x.amount)}</b>
+            <div class="muted">
+              ${esc(x.description||'')} • ${esc(x.payment_mode||'')} • ${esc(x.transaction_date)}
+            </div>
+          </div>
+        </div>
+      `).join('') || '<div class="card empty">No payments yet</div>'}
+    </div>
+  `);
+}
+function drawKhata(){
+  const credit=state.khata
+    .filter(x=>x.entry_type==='credit')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  const debit=state.khata
+    .filter(x=>x.entry_type==='debit')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  shell(`
+    <div class="section">
+      <div>
+        <h2>Khata</h2>
+        <div class="muted">Party wise credit & debit</div>
+      </div>
+      <button class="primary" onclick="openKhata()">+ Add Entry</button>
+    </div>
+
+    <div class="grid">
+      <div class="card stat">
+        <span class="muted">Credit</span>
+        <b>${money(credit)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Debit</span>
+        <b>${money(debit)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Balance</span>
+        <b>${money(credit-debit)}</b>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Entries</h2>
+    </div>
+
+    <div class="list">
+      ${state.khata.map(x=>`
+        <div class="card row">
+          <div>
+            <b>${esc(x.party_name)}</b>
+            <div class="muted">
+              ${esc(x.description||'')} • ${esc(x.entry_date)}
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <b>${x.entry_type==='credit'?'+':'-'}${money(x.amount)}</b>
+            <button onclick="editKhata('${x.id}')">Edit</button>
+            <button onclick="deleteKhata('${x.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('') || '<div class="card empty">No khata entries yet</div>'}
+    </div>
+  `);
+}
 function drawDashboard(){
   const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0);
   const received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);

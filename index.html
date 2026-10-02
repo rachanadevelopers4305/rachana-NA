@@ -199,29 +199,8 @@ window.deleteClient=async(id)=>{
 
 };
 
-window.filterClients=()=>{
 
-  const q=
-    (document.getElementById('clientSearch')?.value||'')
-      .toLowerCase()
-      .trim();
 
-  document
-    .querySelectorAll('.client-item')
-    .forEach(el=>{
-
-      const text=
-        (el.dataset.search||'')
-          .toLowerCase();
-
-      el.style.display=
-        !q || text.includes(q)
-          ? ''
-          : 'none';
-
-    });
-
-};
 function drawKhata(){
   const credit=state.khata
     .filter(x=>x.entry_type==='credit')
@@ -598,3 +577,15 @@ function drawDashboard(){
 
   `);
 }
+
+sb.auth.getSession().then(({data})=>{
+  if(data.session){
+    state.user=data.session.user;
+    load();
+  }else{
+    renderLogin();
+  }
+});
+</script>
+</body>
+</html>

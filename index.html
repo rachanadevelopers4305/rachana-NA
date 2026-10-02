@@ -13,7 +13,7 @@
 const SUPABASE_URL='https://ujlpaeggnhvwjofbldsj.supabase.co';
 const SUPABASE_KEY='sb_publishable_UaBibzyVUUzCZ_EolDn9TA_ZTd8n26H';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let state={tab:'dashboard',user:null,clients:[],cases:[],transactions:[]};
+let state={tab:'dashboard',user:null,clients:[],cases:[],transactions:[],khata:[],cash:[]};
 const money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function renderLogin(msg='',mode='signup'){
@@ -32,18 +32,125 @@ if(error){renderLogin('Account બનાવવામાં સમસ્યા: '
 if(data.session){state.user=data.user;await load();return}
 renderLogin('Account બની ગયું. તમારા email inbox/Spam માં confirmation email તપાસો. Email confirm કર્યા પછી Login કરો.','login');
 }
-async function load(){const [c,ca,t]=await Promise.all([sb.from('clients').select('*').order('created_at',{ascending:false}),sb.from('cases').select('*').order('created_at',{ascending:false}),sb.from('transactions').select('*').order('transaction_date',{ascending:false})]);state.clients=c.data||[];state.cases=ca.data||[];state.transactions=t.data||[];draw()}
-function shell(content){root.innerHTML=`<div class="app"><header class="top"><div><div class="brand">Rachana NA</div><div class="sub">${esc(state.user?.email||'')}</div></div><button class="logout" id="logout">Logout</button></header><main class="wrap"><nav class="nav">${[['dashboard','Dashboard'],['clients','Clients'],['cases','NA Cases'],['payments','Payments']].map(([k,v])=>`<button class="${state.tab===k?'active':''}" data-tab="${k}">${v}</button>`).join('')}</nav>${content}</main></div>`;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;draw()});logout.onclick=async()=>{await sb.auth.signOut()}}
-function draw(){if(state.tab==='dashboard')drawDashboard();else if(state.tab==='clients')drawClients();else if(state.tab==='cases')drawCases();else drawPayments()}
+async function load(){
+  const [c,ca,t,k,cr]=await Promise.all([
+    sb.from('clients').select('*').order('created_at',{ascending:false}),
+    sb.from('cases').select('*').order('created_at',{ascending:false}),
+    sb.from('transactions').select('*').order('transaction_date',{ascending:false}),
+    sb.from('khata_entries').select('*').order('entry_date',{ascending:false}),
+    sb.from('cash_register').select('*').order('register_date',{ascending:false})
+  ]);
+  state.clients=c.data||[];
+  state.cases=ca.data||[];
+  state.transactions=t.data||[];
+  state.khata=k.data||[];
+  state.cash=cr.data||[];
+  draw();
+}
+function shell(content){root.innerHTML=`<div class="app"><header class="top"><div><div class="brand">Rachana NA</div><div class="sub">${esc(state.user?.email||'')}</div></div><button class="logout" id="logout">Logout</button></header><main class="wrap"><nav class="nav">${[['dashboard','Dashboard'],['clients','Clients'],['cases','NA Cases'],['payments','Payments'],['khata','Khata'],['cash','Cash Register']].map(([k,v])=>`<button class="${state.tab===k?'active':''}" data-tab="${k}">${v}</button>`).join('')}</nav>${content}</main></div>`;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;draw()});logout.onclick=async()=>{await sb.auth.signOut()}}
+function draw(){if(state.tab==='dashboard')drawDashboard();else if(state.tab==='clients')drawClients();else if(state.tab==='cases')drawCases();else if(state.tab==='payments')drawPayments();else if(state.tab==='khata')drawKhata();else drawCashRegister()}
 function drawDashboard(){const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0),received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);shell(`<div class="section"><div><h2>Dashboard</h2><div class="muted">તમારી ઓફિસનું ઝડપી overview</div></div><button class="primary" onclick="openClient()">+ New Client</button></div><div class="grid"><div class="card stat"><span class="muted">Clients</span><b>${state.clients.length}</b></div><div class="card stat"><span class="muted">Open Cases</span><b>${state.cases.filter(x=>x.status==='open').length}</b></div><div class="card stat"><span class="muted">Total Amount</span><b>${money(total)}</b></div><div class="card stat"><span class="muted">Pending</span><b>${money(Math.max(0,total-received))}</b></div></div><div class="section"><h2>Recent Cases</h2></div><div class="list">${state.cases.slice(0,5).map(caseRow).join('')||'<div class="card empty">No cases yet</div>'}</div>`)}
 function caseRow(x){const client=state.clients.find(c=>c.id===x.client_id);const pending=Math.max(0,Number(x.total_amount||0)-Number(x.received_amount||0));return `<div class="card row"><div><b>${esc(x.title)}</b><div class="muted">${esc(client?.name||'No client')} • ${esc(x.case_type||'NA')}</div></div><div style="text-align:right"><span class="pill ${x.status==='completed'?'green':''}">${esc(x.status)}</span><div class="muted">${money(pending)} pending</div></div></div>`}
 function drawClients(){shell(`<div class="section"><div><h2>Clients</h2><div class="muted">Client directory</div></div><button class="primary" onclick="openClient()">+ Add Client</button></div><div class="list">${state.clients.map(c=>`<div class="card row"><div><b>${esc(c.name)}</b><div class="muted">${esc(c.phone||'')} ${c.email?'• '+esc(c.email):''}</div></div><button class="secondary" onclick="openClient('${c.id}')">Edit</button></div>`).join('')||'<div class="card empty">No clients yet</div>'}</div>`)}
 function drawCases(){shell(`<div class="section"><div><h2>NA Cases</h2><div class="muted">Revenue / NA work tracking</div></div><button class="primary" onclick="openCase()">+ Add Case</button></div><div class="list">${state.cases.map(caseRow).join('')||'<div class="card empty">No cases yet</div>'}</div>`)}
 function drawPayments(){const income=state.transactions.filter(t=>t.transaction_type==='income').reduce((a,t)=>a+Number(t.amount),0),expense=state.transactions.filter(t=>t.transaction_type==='expense').reduce((a,t)=>a+Number(t.amount),0);shell(`<div class="section"><div><h2>Payments</h2><div class="muted">Income & expense ledger</div></div><button class="primary" onclick="openTxn()">+ Add Entry</button></div><div class="grid"><div class="card stat"><span class="muted">Income</span><b>${money(income)}</b></div><div class="card stat"><span class="muted">Expense</span><b>${money(expense)}</b></div><div class="card stat"><span class="muted">Net</span><b>${money(income-expense)}</b></div><div class="card stat"><span class="muted">Entries</span><b>${state.transactions.length}</b></div></div><div class="section"><h2>Recent Entries</h2></div><div class="list">${state.transactions.slice(0,10).map(t=>`<div class="card row"><div><b>${esc(t.description||'Entry')}</b><div class="muted">${esc(t.payment_mode)} • ${esc(t.transaction_date)}</div></div><b style="color:${t.transaction_type==='income'?'var(--green)':'var(--red)'}">${t.transaction_type==='income'?'+':'-'}${money(t.amount)}</b></div>`).join('')||'<div class="card empty">No entries yet</div>'}</div>`)}
+function drawKhata(){
+  const credit=state.khata.filter(x=>x.entry_type==='credit').reduce((a,x)=>a+Number(x.amount||0),0);
+  const debit=state.khata.filter(x=>x.entry_type==='debit').reduce((a,x)=>a+Number(x.amount||0),0);
+  shell(`<div class="section"><div><h2>Khata</h2><div class="muted">Party wise credit & debit</div></div><button class="primary" onclick="openKhata()">+ Add Entry</button></div><div class="grid"><div class="card stat"><span class="muted">Credit</span><b>${money(credit)}</b></div><div class="card stat"><span class="muted">Debit</span><b>${money(debit)}</b></div><div class="card stat"><span class="muted">Balance</span><b>${money(credit-debit)}</b></div></div><div class="section"><h2>Recent Entries</h2></div><div class="list">${state.khata.map(x=>`<div class="card row"><div><b>${esc(x.party_name)}</b><div class="muted">${esc(x.description||'')} • ${esc(x.entry_date)}</div></div><b>${x.entry_type==='credit'?'+':'-'}${money(x.amount)}</b></div>`).join('')||'<div class="card empty">No khata entries yet</div>'}</div>`);
+}
+function drawCashRegister(){
+  const total=state.cash.reduce((a,x)=>a+Number(x.denomination||0)*Number(x.quantity||0),0);
+  shell(`<div class="section"><div><h2>Cash Register</h2><div class="muted">Cash denomination & quantity</div></div><button class="primary" onclick="openCash()">+ Add Cash</button></div><div class="card stat"><span class="muted">Total Cash</span><b>${money(total)}</b></div><div class="section"><h2>Cash Details</h2></div><div class="list">${state.cash.map(x=>`<div class="card row"><div><b>${money(x.denomination)} × ${x.quantity}</b><div class="muted">${esc(x.notes||'')} • ${esc(x.register_date)}</div></div><b>${money(Number(x.denomination||0)*Number(x.quantity||0))}</b></div>`).join('')||'<div class="card empty">No cash entries yet</div>'}</div>`);
+}
 function modal(title,body,save){root.insertAdjacentHTML('beforeend',`<div class="modal" id="modal"><div class="modalbox"><h2>${title}</h2>${body}<div class="actions"><button class="secondary" onclick="modal.remove()">Cancel</button><button class="primary" id="saveBtn">Save</button></div></div></div>`);saveBtn.onclick=save}
 window.openClient=async(id)=>{const c=state.clients.find(x=>x.id===id)||{};modal(id?'Edit Client':'New Client',`<div class="field"><label>Name</label><input id="f_name" value="${esc(c.name||'')}"></div><div class="formgrid"><div class="field"><label>Phone</label><input id="f_phone" value="${esc(c.phone||'')}"></div><div class="field"><label>Email</label><input id="f_email" value="${esc(c.email||'')}"></div></div><div class="field"><label>Address</label><textarea id="f_address">${esc(c.address||'')}</textarea></div>`,async()=>{const payload={name:f_name.value.trim(),phone:f_phone.value.trim()||null,email:f_email.value.trim()||null,address:f_address.value.trim()||null};if(!payload.name)return alert('Name required');const r=id?await sb.from('clients').update(payload).eq('id',id):await sb.from('clients').insert(payload);if(r.error)return alert(r.error.message);modal.remove();await load()})}
 window.openCase=()=>{modal('New NA Case',`<div class="field"><label>Client</label><select id="f_client">${state.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Title</label><input id="f_title" placeholder="NA / Revenue work"></div><div class="formgrid"><div class="field"><label>Case Type</label><input id="f_type" placeholder="NA"></div><div class="field"><label>Status</label><select id="f_status"><option>open</option><option>pending</option><option>completed</option><option>cancelled</option></select></div></div><div class="formgrid"><div class="field"><label>Total Amount</label><input id="f_total" type="number" min="0" value="0"></div><div class="field"><label>Received Amount</label><input id="f_received" type="number" min="0" value="0"></div></div><div class="field"><label>Due Date</label><input id="f_due" type="date"></div>`,async()=>{if(!f_client.value)return alert('Add a client first');const r=await sb.from('cases').insert({client_id:f_client.value,title:f_title.value.trim(),case_type:f_type.value.trim()||null,status:f_status.value,total_amount:Number(f_total.value||0),received_amount:Number(f_received.value||0),due_date:f_due.value||null});if(r.error)return alert(r.error.message);modal.remove();await load()})}
-window.openTxn=()=>{modal('New Payment Entry',`<div class="formgrid"><div class="field"><label>Type</label><select id="f_ttype"><option value="income">Income</option><option value="expense">Expense</option></select></div><div class="field"><label>Amount</label><input id="f_amount" type="number" min="1"></div></div><div class="formgrid"><div class="field"><label>Payment Mode</label><select id="f_mode"><option>cash</option><option>upi</option><option>bank</option><option>other</option></select></div><div class="field"><label>Date</label><input id="f_date" type="date" value="${new Date().toISOString().slice(0,10)}"></div></div><div class="field"><label>Description</label><input id="f_desc"></div>`,async()=>{const r=await sb.from('transactions').insert({transaction_type:f_ttype.value,amount:Number(f_amount.value),payment_mode:f_mode.value,description:f_desc.value.trim()||null,transaction_date:f_date.value});if(r.error)return alert(r.error.message);modal.remove();await load()})}
+
+window.openKhata=()=>{
+  modal('New Khata Entry',`
+    <div class="field">
+      <label>Party Name</label>
+      <input id="f_party" placeholder="Party name">
+    </div>
+    <div class="formgrid">
+      <div class="field">
+        <label>Type</label>
+        <select id="f_etype">
+          <option value="credit">Credit</option>
+          <option value="debit">Debit</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Amount</label>
+        <input id="f_kamount" type="number" min="1">
+      </div>
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input id="f_kdate" type="date" value="${new Date().toISOString().slice(0,10)}">
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input id="f_kdesc">
+    </div>
+  `,async()=>{
+    const amount=Number(f_kamount.value||0);
+    if(!f_party.value.trim())return alert('Party name required');
+    if(amount<=0)return alert('Amount must be greater than 0');
+
+    const r=await sb.from('khata_entries').insert({
+      party_name:f_party.value.trim(),
+      entry_type:f_etype.value,
+      amount:amount,
+      description:f_kdesc.value.trim()||null,
+      entry_date:f_kdate.value
+    });
+
+    if(r.error)return alert(r.error.message);
+    modal.remove();
+    await load();
+  });
+}
+window.openCash=()=>{
+  modal('New Cash Entry',`
+    <div class="formgrid">
+      <div class="field">
+        <label>Denomination</label>
+        <input id="f_denom" type="number" min="1" placeholder="500">
+      </div>
+      <div class="field">
+        <label>Quantity</label>
+        <input id="f_qty" type="number" min="0" value="1">
+      </div>
+    </div>
+    <div class="field">
+      <label>Date</label>
+      <input id="f_cdate" type="date" value="${new Date().toISOString().slice(0,10)}">
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input id="f_cnotes" placeholder="Optional">
+    </div>
+  `,async()=>{
+    const denomination=Number(f_denom.value||0);
+    const quantity=Number(f_qty.value||0);
+
+    if(denomination<=0)return alert('Denomination required');
+    if(quantity<0)return alert('Quantity cannot be negative');
+
+    const r=await sb.from('cash_register').insert({
+      denomination:denomination,
+      quantity:quantity,
+      register_date:f_cdate.value,
+      notes:f_cnotes.value.trim()||null
+    });
+
+    if(r.error)return alert(r.error.message);
+    modal.remove();
+    await load();
+  });
+}
 sb.auth.onAuthStateChange(async(_event,session)=>{state.user=session?.user||null;if(state.user)await load();else renderLogin()});
 (async()=>{const {data}=await sb.auth.getSession();if(data.session){state.user=data.session.user;await load()}else renderLogin()})();
 </script></body></html>

@@ -49,6 +49,24 @@ async function load(){
 }
 function shell(content){root.innerHTML=`<div class="app"><header class="top"><div><div class="brand">Rachana NA</div><div class="sub">${esc(state.user?.email||'')}</div></div><button class="logout" id="logout">Logout</button></header><main class="wrap"><nav class="nav">${[['dashboard','Dashboard'],['clients','Clients'],['cases','NA Cases'],['payments','Payments'],['khata','Khata'],['cash','Cash Register']].map(([k,v])=>`<button class="${state.tab===k?'active':''}" data-tab="${k}">${v}</button>`).join('')}</nav>${content}</main></div>`;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;draw()});logout.onclick=async()=>{await sb.auth.signOut()}}
 function draw(){if(state.tab==='dashboard')drawDashboard();else if(state.tab==='clients')drawClients();else if(state.tab==='cases')drawCases();else if(state.tab==='payments')drawPayments();else if(state.tab==='khata')drawKhata();else drawCashRegister()}
+function caseRow(x){
+  return `
+    <div class="card row">
+      <div>
+        <b>${esc(x.title||'Untitled Case')}</b>
+        <div class="muted">
+          ${esc(x.case_type||'')} • ${esc(x.status||'')}
+        </div>
+      </div>
+      <div>
+        <b>${money(x.total_amount||0)}</b>
+        <div class="muted">
+          Received: ${money(x.received_amount||0)}
+        </div>
+      </div>
+    </div>
+  `;
+}
 function drawDashboard(){
   const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0);
   const received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);

@@ -57,12 +57,216 @@ function drawPayments(){const income=state.transactions.filter(t=>t.transaction_
 function drawKhata(){
   const credit=state.khata.filter(x=>x.entry_type==='credit').reduce((a,x)=>a+Number(x.amount||0),0);
   const debit=state.khata.filter(x=>x.entry_type==='debit').reduce((a,x)=>a+Number(x.amount||0),0);
-  shell(`<div class="section"><div><h2>Khata</h2><div class="muted">Party wise credit & debit</div></div><button class="primary" onclick="openKhata()">+ Add Entry</button></div><div class="grid"><div class="card stat"><span class="muted">Credit</span><b>${money(credit)}</b></div><div class="card stat"><span class="muted">Debit</span><b>${money(debit)}</b></div><div class="card stat"><span class="muted">Balance</span><b>${money(credit-debit)}</b></div></div><div class="section"><h2>Recent Entries</h2></div><div class="list">${state.khata.map(x=>`<div class="card row"><div><b>${esc(x.party_name)}</b><div class="muted">${esc(x.description||'')} • ${esc(x.entry_date)}</div></div><b>${x.entry_type==='credit'?'+':'-'}${money(x.amount)}</b></div>`).join('')||'<div class="card empty">No khata entries yet</div>'}</div>`);
+
+  shell(`
+    <div class="section">
+      <div>
+        <h2>Khata</h2>
+        <div class="muted">Party wise credit & debit</div>
+      </div>
+      <button class="primary" onclick="openKhata()">+ Add Entry</button>
+    </div>
+
+    <div class="grid">
+      <div class="card stat">
+        <span class="muted">Credit</span>
+        <b>${money(credit)}</b>
+      </div>
+      <div class="card stat">
+        <span class="muted">Debit</span>
+        <b>${money(debit)}</b>
+      </div>
+      <div class="card stat">
+        <span class="muted">Balance</span>
+        <b>${money(credit-debit)}</b>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Entries</h2>
+    </div>
+
+    <div class="list">
+      ${state.khata.map(x=>`
+        <div class="card row">
+          <div>
+            <b>${esc(x.party_name)}</b>
+            <div class="muted">
+              ${esc(x.description||'')} • ${esc(x.entry_date)}
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <b>${x.entry_type==='credit'?'+':'-'}${money(x.amount)}</b>
+            <button onclick="editKhata('${x.id}')">Edit</button>
+            <button onclick="deleteKhata('${x.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('') || '<div class="card empty">No khata entries yet</div>'}
+    </div>
+  `);
 }
+window.editKhata=async(id)=>{
+  const x=state.khata.find(a=>a.id===id);
+  if(!x)return;
+
+  modal('Edit Khata Entry',`
+    <div class="field">
+      <label>Party Name</label>
+      <input id="f_party" value="${esc(x.party_name)}">
+    </div>
+
+    <div class="formgrid">
+      <div class="field">
+        <label>Type</label>
+        <select id="f_etype">
+          <option value="credit" ${x.entry_type==='credit'?'selected':''}>Credit</option>
+          <option value="debit" ${x.entry_type==='debit'?'selected':''}>Debit</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Amount</label>
+        <input id="f_kamount" type="number" min="1" value="${x.amount}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Date</label>
+      <input id="f_kdate" type="date" value="${x.entry_date}">
+    </div>
+
+    <div class="field">
+      <label>Description</label>
+      <input id="f_kdesc" value="${esc(x.description||'')}">
+    </div>
+  `,async()=>{
+    const amount=Number(f_kamount.value||0);
+
+    if(!f_party.value.trim())return alert('Party name required');
+    if(amount<=0)return alert('Amount must be greater than 0');
+
+    const r=await sb.from('khata_entries').update({
+      party_name:f_party.value.trim(),
+      entry_type:f_etype.value,
+      amount:amount,
+      description:f_kdesc.value.trim()||null,
+      entry_date:f_kdate.value
+    }).eq('id',id);
+
+    if(r.error)return alert(r.error.message);
+
+    modal.remove();
+    await load();
+  });
+};
+
+window.deleteKhata=async(id)=>{
+  if(!confirm('Delete this Khata entry?'))return;
+
+  const r=await sb.from('khata_entries').delete().eq('id',id);
+
+  if(r.error)return alert(r.error.message);
+
+  await load();
+};
 function drawCashRegister(){
   const total=state.cash.reduce((a,x)=>a+Number(x.denomination||0)*Number(x.quantity||0),0);
-  shell(`<div class="section"><div><h2>Cash Register</h2><div class="muted">Cash denomination & quantity</div></div><button class="primary" onclick="openCash()">+ Add Cash</button></div><div class="card stat"><span class="muted">Total Cash</span><b>${money(total)}</b></div><div class="section"><h2>Cash Details</h2></div><div class="list">${state.cash.map(x=>`<div class="card row"><div><b>${money(x.denomination)} × ${x.quantity}</b><div class="muted">${esc(x.notes||'')} • ${esc(x.register_date)}</div></div><b>${money(Number(x.denomination||0)*Number(x.quantity||0))}</b></div>`).join('')||'<div class="card empty">No cash entries yet</div>'}</div>`);
+
+  shell(`
+    <div class="section">
+      <div>
+        <h2>Cash Register</h2>
+        <div class="muted">Cash denomination & quantity</div>
+      </div>
+      <button class="primary" onclick="openCash()">+ Add Cash</button>
+    </div>
+
+    <div class="card stat">
+      <span class="muted">Total Cash</span>
+      <b>${money(total)}</b>
+    </div>
+
+    <div class="section">
+      <h2>Cash Details</h2>
+    </div>
+
+    <div class="list">
+      ${state.cash.map(x=>`
+        <div class="card row">
+          <div>
+            <b>${money(x.denomination)} × ${x.quantity}</b>
+            <div class="muted">
+              ${esc(x.notes||'')} • ${esc(x.register_date)}
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px">
+            <b>${money(Number(x.denomination||0)*Number(x.quantity||0))}</b>
+            <button onclick="editCash('${x.id}')">Edit</button>
+            <button onclick="deleteCash('${x.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('') || '<div class="card empty">No cash entries yet</div>'}
+    </div>
+  `);
 }
+window.editCash=async(id)=>{
+  const x=state.cash.find(a=>a.id===id);
+  if(!x)return;
+
+  modal('Edit Cash Entry',`
+    <div class="formgrid">
+      <div class="field">
+        <label>Denomination</label>
+        <input id="f_denom" type="number" min="1" value="${x.denomination}">
+      </div>
+
+      <div class="field">
+        <label>Quantity</label>
+        <input id="f_qty" type="number" min="0" value="${x.quantity}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Date</label>
+      <input id="f_cdate" type="date" value="${x.register_date}">
+    </div>
+
+    <div class="field">
+      <label>Notes</label>
+      <input id="f_cnotes" value="${esc(x.notes||'')}">
+    </div>
+  `,async()=>{
+    const denomination=Number(f_denom.value||0);
+    const quantity=Number(f_qty.value||0);
+
+    if(denomination<=0)return alert('Denomination required');
+    if(quantity<0)return alert('Quantity cannot be negative');
+
+    const r=await sb.from('cash_register').update({
+      denomination:denomination,
+      quantity:quantity,
+      register_date:f_cdate.value,
+      notes:f_cnotes.value.trim()||null
+    }).eq('id',id);
+
+    if(r.error)return alert(r.error.message);
+
+    modal.remove();
+    await load();
+  });
+};
+
+window.deleteCash=async(id)=>{
+  if(!confirm('Delete this Cash entry?'))return;
+
+  const r=await sb.from('cash_register').delete().eq('id',id);
+
+  if(r.error)return alert(r.error.message);
+
+  await load();
+};
 function modal(title,body,save){root.insertAdjacentHTML('beforeend',`<div class="modal" id="modal"><div class="modalbox"><h2>${title}</h2>${body}<div class="actions"><button class="secondary" onclick="modal.remove()">Cancel</button><button class="primary" id="saveBtn">Save</button></div></div></div>`);saveBtn.onclick=save}
 window.openClient=async(id)=>{const c=state.clients.find(x=>x.id===id)||{};modal(id?'Edit Client':'New Client',`<div class="field"><label>Name</label><input id="f_name" value="${esc(c.name||'')}"></div><div class="formgrid"><div class="field"><label>Phone</label><input id="f_phone" value="${esc(c.phone||'')}"></div><div class="field"><label>Email</label><input id="f_email" value="${esc(c.email||'')}"></div></div><div class="field"><label>Address</label><textarea id="f_address">${esc(c.address||'')}</textarea></div>`,async()=>{const payload={name:f_name.value.trim(),phone:f_phone.value.trim()||null,email:f_email.value.trim()||null,address:f_address.value.trim()||null};if(!payload.name)return alert('Name required');const r=id?await sb.from('clients').update(payload).eq('id',id):await sb.from('clients').insert(payload);if(r.error)return alert(r.error.message);modal.remove();await load()})}
 window.openCase=()=>{modal('New NA Case',`<div class="field"><label>Client</label><select id="f_client">${state.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Title</label><input id="f_title" placeholder="NA / Revenue work"></div><div class="formgrid"><div class="field"><label>Case Type</label><input id="f_type" placeholder="NA"></div><div class="field"><label>Status</label><select id="f_status"><option>open</option><option>pending</option><option>completed</option><option>cancelled</option></select></div></div><div class="formgrid"><div class="field"><label>Total Amount</label><input id="f_total" type="number" min="0" value="0"></div><div class="field"><label>Received Amount</label><input id="f_received" type="number" min="0" value="0"></div></div><div class="field"><label>Due Date</label><input id="f_due" type="date"></div>`,async()=>{if(!f_client.value)return alert('Add a client first');const r=await sb.from('cases').insert({client_id:f_client.value,title:f_title.value.trim(),case_type:f_type.value.trim()||null,status:f_status.value,total_amount:Number(f_total.value||0),received_amount:Number(f_received.value||0),due_date:f_due.value||null});if(r.error)return alert(r.error.message);modal.remove();await load()})}

@@ -577,6 +577,329 @@ function drawDashboard(){
 
   `);
 }
+function drawCases(){
+
+  const clientMap = {};
+  state.clients.forEach(c => {
+    clientMap[c.id] = c.name;
+  });
+
+  const cases = state.cases;
+
+  const totalAmount = cases.reduce(
+    (sum,x)=>sum + Number(x.total_amount || 0),0
+  );
+
+  const receivedAmount = cases.reduce(
+    (sum,x)=>sum + Number(x.received_amount || 0),0
+  );
+
+  const pendingAmount = Math.max(
+    0,
+    totalAmount - receivedAmount
+  );
+
+  const expenses = state.transactions
+    .filter(t => t.transaction_type === 'expense')
+    .reduce((sum,t)=>sum + Number(t.amount || 0),0);
+
+  const profit = receivedAmount - expenses;
+
+  shell(`
+
+    <div class="section">
+
+      <div>
+        <h2>NA Cases</h2>
+        <div class="muted">
+          ${cases.length} total cases
+        </div>
+      </div>
+
+      <button class="primary" onclick="openCase()">
+        + New Case
+      </button>
+
+    </div>
+
+    <div class="grid">
+
+      <div class="card stat">
+        <span class="muted">Total Amount</span>
+        <b>${money(totalAmount)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Received</span>
+        <b>${money(receivedAmount)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Pending</span>
+        <b>${money(pendingAmount)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Expenses</span>
+        <b>${money(expenses)}</b>
+      </div>
+
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+
+      <div class="card stat">
+        <span class="muted">Profit</span>
+        <b>${money(profit)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Open Cases</span>
+        <b>${cases.filter(x=>x.status==='open').length}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Completed</span>
+        <b>${cases.filter(x=>x.status==='completed').length}</b>
+      </div>
+
+    </div>
+
+    <div class="section">
+      <h2>All Cases</h2>
+    </div>
+
+    <div class="list">
+
+      ${
+        cases.map(x=>{
+
+          const caseExpenses = state.transactions
+            .filter(t =>
+              t.case_id === x.id &&
+              t.transaction_type === 'expense'
+            )
+            .reduce(
+              (sum,t)=>sum + Number(t.amount || 0),
+              0
+            );
+
+          const caseProfit =
+            Number(x.received_amount || 0) - caseExpenses;
+
+          return `
+
+            <div class="card">
+
+              <div class="row">
+
+                <div>
+
+                  <b>
+                    ${esc(x.title || 'Untitled Case')}
+                  </b>
+
+                  <div class="muted">
+                    Client:
+                    ${esc(clientMap[x.client_id] || 'Unknown')}
+                  </div>
+
+                  <div class="muted">
+                    Type:
+                    ${esc(x.case_type || '')}
+                    •
+                    Status:
+                    ${esc(x.status || '')}
+                  </div>
+
+                </div>
+
+                <div style="text-align:right">
+
+                  <b>
+                    ${money(x.total_amount)}
+                  </b>
+
+                  <div class="muted">
+                    Received:
+                    ${money(x.received_amount)}
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:
+                    repeat(3,1fr);
+                  gap:8px;
+                  margin-top:14px;
+                "
+              >
+
+                <div class="card">
+                  <div class="muted">Pending</div>
+                  <b>
+                    ${money(
+                      Math.max(
+                        0,
+                        Number(x.total_amount || 0) -
+                        Number(x.received_amount || 0)
+                      )
+                    )}
+                  </b>
+                </div>
+
+                <div class="card">
+                  <div class="muted">Expense</div>
+                  <b>
+                    ${money(caseExpenses)}
+                  </b>
+                </div>
+
+                <div class="card">
+                  <div class="muted">Profit</div>
+                  <b>
+                    ${money(caseProfit)}
+                  </b>
+                </div>
+
+              </div>
+
+            </div>
+
+          `;
+        }).join('')
+
+        ||
+
+        '<div class="card empty">No NA cases yet</div>'
+      }
+
+    </div>
+
+  `);
+}
+function openCase(){
+
+  const clientOptions = state.clients.map(c =>
+    `<option value="${c.id}">${esc(c.name)}</option>`
+  ).join('');
+
+  shell(`
+
+    <div class="section">
+      <div>
+        <h2>New NA Case</h2>
+        <div class="muted">Create a new case</div>
+      </div>
+    </div>
+
+    <div class="card">
+
+      <label>Client</label>
+      <select id="caseClient">
+        <option value="">Select Client</option>
+        ${clientOptions}
+      </select>
+
+      <label>Case Title</label>
+      <input id="caseTitle" placeholder="e.g. NA Permission">
+
+      <label>Case Type</label>
+      <input id="caseType" placeholder="e.g. Residential / Commercial">
+
+      <label>Status</label>
+      <select id="caseStatus">
+        <option value="open">Open</option>
+        <option value="pending">Pending</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+
+      <label>Total Amount</label>
+      <input id="caseTotal" type="number" placeholder="0">
+
+      <label>Received Amount</label>
+      <input id="caseReceived" type="number" placeholder="0">
+
+      <label>Due Date</label>
+      <input id="caseDueDate" type="date">
+
+      <label>Notes</label>
+      <textarea id="caseNotes" placeholder="Notes"></textarea>
+
+      <div style="margin-top:16px">
+
+        <button class="primary" onclick="saveCase()">
+          Save Case
+        </button>
+
+        <button onclick="draw()">
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  `);
+}
+async function saveCase(){
+
+  const client_id = document.getElementById('caseClient').value;
+  const title = document.getElementById('caseTitle').value.trim();
+  const case_type = document.getElementById('caseType').value.trim();
+  const status = document.getElementById('caseStatus').value;
+  const total_amount = Number(document.getElementById('caseTotal').value || 0);
+  const received_amount = Number(document.getElementById('caseReceived').value || 0);
+  const due_date = document.getElementById('caseDueDate').value || null;
+  const notes = document.getElementById('caseNotes').value.trim();
+
+  if(!client_id){
+    alert('Please select a client');
+    return;
+  }
+
+  if(!title){
+    alert('Please enter case title');
+    return;
+  }
+
+  if(total_amount < 0 || received_amount < 0){
+    alert('Amount cannot be negative');
+    return;
+  }
+
+  if(received_amount > total_amount){
+    alert('Received amount cannot be greater than total amount');
+    return;
+  }
+
+  const {error} = await sb
+    .from('cases')
+    .insert([{
+      client_id,
+      title,
+      case_type,
+      status,
+      total_amount,
+      received_amount,
+      due_date,
+      notes
+    }]);
+
+  if(error){
+    alert('Error: ' + error.message);
+    return;
+  }
+
+  alert('NA Case saved successfully');
+
+  await load();
+}
 
 sb.auth.getSession().then(({data})=>{
   if(data.session){

@@ -49,60 +49,96 @@ async function load(){
 }
 function shell(content){root.innerHTML=`<div class="app"><header class="top"><div><div class="brand">Rachana NA</div><div class="sub">${esc(state.user?.email||'')}</div></div><button class="logout" id="logout">Logout</button></header><main class="wrap"><nav class="nav">${[['dashboard','Dashboard'],['clients','Clients'],['cases','NA Cases'],['payments','Payments'],['khata','Khata'],['cash','Cash Register']].map(([k,v])=>`<button class="${state.tab===k?'active':''}" data-tab="${k}">${v}</button>`).join('')}</nav>${content}</main></div>`;document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;draw()});logout.onclick=async()=>{await sb.auth.signOut()}}
 function draw(){if(state.tab==='dashboard')drawDashboard();else if(state.tab==='clients')drawClients();else if(state.tab==='cases')drawCases();else if(state.tab==='payments')drawPayments();else if(state.tab==='khata')drawKhata();else drawCashRegister()}
-function drawDashboard(){const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0),received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);shell(`<div class="section"><div><h2>Dashboard</h2><div class="muted">તમારી ઓફિસનું ઝડપી overview</div></div><button class="primary" onclick="openClient()">+ New Client</button></div><div class="grid"><div class="card stat"><span class="muted">Clients</span><b>${state.clients.length}</b></div><div class="card stat"><span class="muted">Open Cases</span><b>${state.cases.filter(x=>x.status==='open').length}</b></div><div class="card stat"><span class="muted">Total Amount</span><b>${money(total)}</b></div><div class="card stat"><span class="muted">Pending</span><b>${money(Math.max(0,total-received))}</b></div></div><div class="section"><h2>Recent Cases</h2></div><div class="list">${state.cases.slice(0,5).map(caseRow).join('')||'<div class="card empty">No cases yet</div>'}</div>`)}
-function caseRow(x){const client=state.clients.find(c=>c.id===x.client_id);const pending=Math.max(0,Number(x.total_amount||0)-Number(x.received_amount||0));return `<div class="card row"><div><b>${esc(x.title)}</b><div class="muted">${esc(client?.name||'No client')} • ${esc(x.case_type||'NA')}</div></div><div style="text-align:right"><span class="pill ${x.status==='completed'?'green':''}">${esc(x.status)}</span><div class="muted">${money(pending)} pending</div></div></div>`}
-function drawClients(){shell(`<div class="section"><div><h2>Clients</h2><div class="muted">Client directory</div></div><button class="primary" onclick="openClient()">+ Add Client</button></div><div class="list">${state.clients.map(c=>`<div class="card row"><div><b>${esc(c.name)}</b><div class="muted">${esc(c.phone||'')} ${c.email?'• '+esc(c.email):''}</div></div><button class="secondary" onclick="openClient('${c.id}')">Edit</button></div>`).join('')||'<div class="card empty">No clients yet</div>'}</div>`)}
-function drawCases(){shell(`<div class="section"><div><h2>NA Cases</h2><div class="muted">Revenue / NA work tracking</div></div><button class="primary" onclick="openCase()">+ Add Case</button></div><div class="list">${state.cases.map(caseRow).join('')||'<div class="card empty">No cases yet</div>'}</div>`)}
-function drawPayments(){const income=state.transactions.filter(t=>t.transaction_type==='income').reduce((a,t)=>a+Number(t.amount),0),expense=state.transactions.filter(t=>t.transaction_type==='expense').reduce((a,t)=>a+Number(t.amount),0);shell(`<div class="section"><div><h2>Payments</h2><div class="muted">Income & expense ledger</div></div><button class="primary" onclick="openTxn()">+ Add Entry</button></div><div class="grid"><div class="card stat"><span class="muted">Income</span><b>${money(income)}</b></div><div class="card stat"><span class="muted">Expense</span><b>${money(expense)}</b></div><div class="card stat"><span class="muted">Net</span><b>${money(income-expense)}</b></div><div class="card stat"><span class="muted">Entries</span><b>${state.transactions.length}</b></div></div><div class="section"><h2>Recent Entries</h2></div><div class="list">${state.transactions.slice(0,10).map(t=>`<div class="card row"><div><b>${esc(t.description||'Entry')}</b><div class="muted">${esc(t.payment_mode)} • ${esc(t.transaction_date)}</div></div><b style="color:${t.transaction_type==='income'?'var(--green)':'var(--red)'}">${t.transaction_type==='income'?'+':'-'}${money(t.amount)}</b></div>`).join('')||'<div class="card empty">No entries yet</div>'}</div>`)}
-function drawKhata(){
-  const credit=state.khata.filter(x=>x.entry_type==='credit').reduce((a,x)=>a+Number(x.amount||0),0);
-  const debit=state.khata.filter(x=>x.entry_type==='debit').reduce((a,x)=>a+Number(x.amount||0),0);
+function drawDashboard(){
+  const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0);
+  const received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);
+  const pending=Math.max(0,total-received);
+
+  const income=state.transactions
+    .filter(t=>t.transaction_type==='income')
+    .reduce((a,t)=>a+Number(t.amount||0),0);
+
+  const expense=state.transactions
+    .filter(t=>t.transaction_type==='expense')
+    .reduce((a,t)=>a+Number(t.amount||0),0);
+
+  const khataCredit=state.khata
+    .filter(x=>x.entry_type==='credit')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  const khataDebit=state.khata
+    .filter(x=>x.entry_type==='debit')
+    .reduce((a,x)=>a+Number(x.amount||0),0);
+
+  const khataBalance=khataCredit-khataDebit;
+
+  const cash=state.cash
+    .reduce((a,x)=>a+Number(x.denomination||0)*Number(x.quantity||0),0);
 
   shell(`
     <div class="section">
       <div>
-        <h2>Khata</h2>
-        <div class="muted">Party wise credit & debit</div>
+        <h2>Dashboard</h2>
+        <div class="muted">તમારી ઓફિસનું ઝડપી overview</div>
       </div>
-      <button class="primary" onclick="openKhata()">+ Add Entry</button>
+      <button class="primary" onclick="openClient()">+ New Client</button>
     </div>
 
     <div class="grid">
       <div class="card stat">
-        <span class="muted">Credit</span>
-        <b>${money(credit)}</b>
+        <span class="muted">Clients</span>
+        <b>${state.clients.length}</b>
       </div>
+
       <div class="card stat">
-        <span class="muted">Debit</span>
-        <b>${money(debit)}</b>
+        <span class="muted">Open Cases</span>
+        <b>${state.cases.filter(x=>x.status==='open').length}</b>
       </div>
+
       <div class="card stat">
-        <span class="muted">Balance</span>
-        <b>${money(credit-debit)}</b>
+        <span class="muted">Total Amount</span>
+        <b>${money(total)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Pending Cases</span>
+        <b>${money(pending)}</b>
       </div>
     </div>
 
     <div class="section">
-      <h2>Recent Entries</h2>
+      <h2>Financial Overview</h2>
+    </div>
+
+    <div class="grid">
+      <div class="card stat">
+        <span class="muted">Income</span>
+        <b>${money(income)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Expense</span>
+        <b>${money(expense)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Khata Balance</span>
+        <b>${money(khataBalance)}</b>
+      </div>
+
+      <div class="card stat">
+        <span class="muted">Cash Balance</span>
+        <b>${money(cash)}</b>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Cases</h2>
     </div>
 
     <div class="list">
-      ${state.khata.map(x=>`
-        <div class="card row">
-          <div>
-            <b>${esc(x.party_name)}</b>
-            <div class="muted">
-              ${esc(x.description||'')} • ${esc(x.entry_date)}
-            </div>
-          </div>
-
-          <div style="display:flex;align-items:center;gap:10px">
-            <b>${x.entry_type==='credit'?'+':'-'}${money(x.amount)}</b>
-            <button onclick="editKhata('${x.id}')">Edit</button>
-            <button onclick="deleteKhata('${x.id}')">Delete</button>
-          </div>
-        </div>
-      `).join('') || '<div class="card empty">No khata entries yet</div>'}
+      ${state.cases.slice(0,5).map(caseRow).join('')
+        || '<div class="card empty">No cases yet</div>'}
     </div>
   `);
 }

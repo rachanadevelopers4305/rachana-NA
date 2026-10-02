@@ -68,98 +68,160 @@ function caseRow(x){
   `;
 }
 function drawClients(){
-  shell(`
-    <div class="section">
-      <div>
-        <h2>Clients</h2>
-        <div class="muted">તમારા બધા clients</div>
-      </div>
-      <button class="primary" onclick="openClient()">+ New Client</button>
-    </div>
 
-    <div class="list">
-      ${state.clients.map(x=>`
-        <div class="card row">
-          <div>
-            <b>${esc(x.name||'')}</b>
-            <div class="muted">${esc(x.phone||'')}</div>
-            <div class="muted">${esc(x.address||'')}</div>
-          </div>
-          <button onclick="openClient('${x.id}')">Edit</button>
+  const clients = state.clients;
+
+  shell(`
+
+    <div class="section">
+
+      <div>
+        <h2 style="margin-bottom:4px">
+          Clients
+        </h2>
+
+        <div class="muted">
+          ${clients.length} total clients
         </div>
-      `).join('') || '<div class="card empty">No clients yet</div>'}
-    </div>
-  `);
-}
-function drawCases(){
-  shell(`
-    <div class="section">
-      <div>
-        <h2>NA Cases</h2>
-        <div class="muted">તમારા બધા NA cases</div>
-      </div>
-      <button class="primary" onclick="openCase()">+ New Case</button>
-    </div>
-
-    <div class="list">
-      ${state.cases.map(x=>caseRow(x)).join('')
-        || '<div class="card empty">No cases yet</div>'}
-    </div>
-  `);
-}
-function drawPayments(){
-  const income=state.transactions
-    .filter(x=>x.transaction_type==='income')
-    .reduce((a,x)=>a+Number(x.amount||0),0);
-
-  const expense=state.transactions
-    .filter(x=>x.transaction_type==='expense')
-    .reduce((a,x)=>a+Number(x.amount||0),0);
-
-  shell(`
-    <div class="section">
-      <div>
-        <h2>Payments</h2>
-        <div class="muted">Income & Expense</div>
-      </div>
-      <button class="primary" onclick="openTxn()">+ Add Payment</button>
-    </div>
-
-    <div class="grid">
-      <div class="card stat">
-        <span class="muted">Income</span>
-        <b>${money(income)}</b>
       </div>
 
-      <div class="card stat">
-        <span class="muted">Expense</span>
-        <b>${money(expense)}</b>
-      </div>
+      <button
+        class="primary"
+        onclick="openClient()"
+      >
+        + New Client
+      </button>
 
-      <div class="card stat">
-        <span class="muted">Balance</span>
-        <b>${money(income-expense)}</b>
-      </div>
     </div>
 
-    <div class="section">
-      <h2>Recent Payments</h2>
+
+    <div class="card" style="margin-bottom:16px">
+
+      <input
+        id="clientSearch"
+        placeholder="Search client by name or phone..."
+        oninput="filterClients()"
+        style="width:100%"
+      >
+
     </div>
 
-    <div class="list">
-      ${state.transactions.map(x=>`
-        <div class="card row">
-          <div>
-            <b>${x.transaction_type==='income'?'+':'-'}${money(x.amount)}</b>
-            <div class="muted">
-              ${esc(x.description||'')} • ${esc(x.payment_mode||'')} • ${esc(x.transaction_date)}
+
+    <div id="clientsList" class="list">
+
+      ${
+        clients.map(x=>`
+
+          <div
+            class="card row client-item"
+            data-search="${esc(
+              (x.name||'')+' '+(x.phone||'')+' '+(x.email||'')
+            ).toLowerCase()}"
+          >
+
+            <div>
+
+              <b>
+                ${esc(x.name||'')}
+              </b>
+
+              ${
+                x.phone
+                ? `<div class="muted">📞 ${esc(x.phone)}</div>`
+                : ''
+              }
+
+              ${
+                x.email
+                ? `<div class="muted">✉ ${esc(x.email)}</div>`
+                : ''
+              }
+
+              ${
+                x.address
+                ? `<div class="muted">📍 ${esc(x.address)}</div>`
+                : ''
+              }
+
             </div>
-          </div>
-        </div>
-      `).join('') || '<div class="card empty">No payments yet</div>'}
+
+
+            <div
+              style="
+                display:flex;
+                gap:8px;
+                align-items:center;
+              "
+            >
+
+              <button
+    onclick="openClient('${x.id}')"
+  >
+    Edit
+  </button>
+
+  <button
+    onclick="deleteClient('${x.id}')"
+  >
+    Delete
+  </button>
+</div>
+
+        `).join('')
+
+        ||
+
+        '<div class="card empty">No clients yet</div>'
+      }
+
     </div>
+
   `);
 }
+window.deleteClient=async(id)=>{
+
+  const client=state.clients.find(x=>x.id===id);
+
+  if(!client)return;
+
+  if(!confirm(`Delete client "${client.name}"?`))return;
+
+  const r=await sb
+    .from('clients')
+    .delete()
+    .eq('id',id);
+
+  if(r.error){
+    return alert(r.error.message);
+  }
+
+  await load();
+
+};
+
+window.filterClients=()=>{
+
+  const q=
+    (document.getElementById('clientSearch')?.value||'')
+      .toLowerCase()
+      .trim();
+
+  document
+    .querySelectorAll('.client-item')
+    .forEach(el=>{
+
+      const text=
+        (el.dataset.search||'')
+          .toLowerCase();
+
+      el.style.display=
+        !q || text.includes(q)
+          ? ''
+          : 'none';
+
+    });
+
+};
 function drawKhata(){
   const credit=state.khata
     .filter(x=>x.entry_type==='credit')
@@ -220,347 +282,319 @@ function drawKhata(){
   `);
 }
 function drawDashboard(){
-  const total=state.cases.reduce((a,x)=>a+Number(x.total_amount||0),0);
-  const received=state.cases.reduce((a,x)=>a+Number(x.received_amount||0),0);
-  const pending=Math.max(0,total-received);
 
-  const income=state.transactions
-    .filter(t=>t.transaction_type==='income')
-    .reduce((a,t)=>a+Number(t.amount||0),0);
+  const total=
+    state.cases.reduce(
+      (a,x)=>a+Number(x.total_amount||0),
+      0
+    );
 
-  const expense=state.transactions
-    .filter(t=>t.transaction_type==='expense')
-    .reduce((a,t)=>a+Number(t.amount||0),0);
+  const received=
+    state.cases.reduce(
+      (a,x)=>a+Number(x.received_amount||0),
+      0
+    );
 
-  const khataCredit=state.khata
-    .filter(x=>x.entry_type==='credit')
-    .reduce((a,x)=>a+Number(x.amount||0),0);
+  const pending=
+    Math.max(0,total-received);
 
-  const khataDebit=state.khata
-    .filter(x=>x.entry_type==='debit')
-    .reduce((a,x)=>a+Number(x.amount||0),0);
+  const income=
+    state.transactions
+      .filter(t=>t.transaction_type==='income')
+      .reduce(
+        (a,t)=>a+Number(t.amount||0),
+        0
+      );
 
-  const khataBalance=khataCredit-khataDebit;
+  const expense=
+    state.transactions
+      .filter(t=>t.transaction_type==='expense')
+      .reduce(
+        (a,t)=>a+Number(t.amount||0),
+        0
+      );
 
-  const cash=state.cash
-    .reduce((a,x)=>a+Number(x.denomination||0)*Number(x.quantity||0),0);
+  const khataCredit=
+    state.khata
+      .filter(x=>x.entry_type==='credit')
+      .reduce(
+        (a,x)=>a+Number(x.amount||0),
+        0
+      );
 
-  shell(`
-    <div class="section">
-      <div>
-        <h2>Dashboard</h2>
-        <div class="muted">તમારી ઓફિસનું ઝડપી overview</div>
-      </div>
-      <button class="primary" onclick="openClient()">+ New Client</button>
-    </div>
+  const khataDebit=
+    state.khata
+      .filter(x=>x.entry_type==='debit')
+      .reduce(
+        (a,x)=>a+Number(x.amount||0),
+        0
+      );
 
-    <div class="grid">
-      <div class="card stat">
-        <span class="muted">Clients</span>
-        <b>${state.clients.length}</b>
-      </div>
+  const khataBalance=
+    khataCredit-khataDebit;
 
-      <div class="card stat">
-        <span class="muted">Open Cases</span>
-        <b>${state.cases.filter(x=>x.status==='open').length}</b>
-      </div>
+  const cash=
+    state.cash.reduce(
+      (a,x)=>
+        a+
+        Number(x.denomination||0)*
+        Number(x.quantity||0),
+      0
+    );
 
-      <div class="card stat">
-        <span class="muted">Total Amount</span>
-        <b>${money(total)}</b>
-      </div>
+  const openCases=
+    state.cases.filter(
+      x=>x.status==='open'
+    ).length;
 
-      <div class="card stat">
-        <span class="muted">Pending Cases</span>
-        <b>${money(pending)}</b>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>Financial Overview</h2>
-    </div>
-
-    <div class="grid">
-      <div class="card stat">
-        <span class="muted">Income</span>
-        <b>${money(income)}</b>
-      </div>
-
-      <div class="card stat">
-        <span class="muted">Expense</span>
-        <b>${money(expense)}</b>
-      </div>
-
-      <div class="card stat">
-        <span class="muted">Khata Balance</span>
-        <b>${money(khataBalance)}</b>
-      </div>
-
-      <div class="card stat">
-        <span class="muted">Cash Balance</span>
-        <b>${money(cash)}</b>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>Recent Cases</h2>
-    </div>
-
-    <div class="list">
-      ${state.cases.slice(0,5).map(caseRow).join('')
-        || '<div class="card empty">No cases yet</div>'}
-    </div>
-  `);
-}
-window.editKhata=async(id)=>{
-  const x=state.khata.find(a=>a.id===id);
-  if(!x)return;
-
-  modal('Edit Khata Entry',`
-    <div class="field">
-      <label>Party Name</label>
-      <input id="f_party" value="${esc(x.party_name)}">
-    </div>
-
-    <div class="formgrid">
-      <div class="field">
-        <label>Type</label>
-        <select id="f_etype">
-          <option value="credit" ${x.entry_type==='credit'?'selected':''}>Credit</option>
-          <option value="debit" ${x.entry_type==='debit'?'selected':''}>Debit</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label>Amount</label>
-        <input id="f_kamount" type="number" min="1" value="${x.amount}">
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Date</label>
-      <input id="f_kdate" type="date" value="${x.entry_date}">
-    </div>
-
-    <div class="field">
-      <label>Description</label>
-      <input id="f_kdesc" value="${esc(x.description||'')}">
-    </div>
-  `,async()=>{
-    const amount=Number(f_kamount.value||0);
-
-    if(!f_party.value.trim())return alert('Party name required');
-    if(amount<=0)return alert('Amount must be greater than 0');
-
-    const r=await sb.from('khata_entries').update({
-      party_name:f_party.value.trim(),
-      entry_type:f_etype.value,
-      amount:amount,
-      description:f_kdesc.value.trim()||null,
-      entry_date:f_kdate.value
-    }).eq('id',id);
-
-    if(r.error)return alert(r.error.message);
-
-    modal.remove();
-    await load();
-  });
-};
-
-window.deleteKhata=async(id)=>{
-  if(!confirm('Delete this Khata entry?'))return;
-
-  const r=await sb.from('khata_entries').delete().eq('id',id);
-
-  if(r.error)return alert(r.error.message);
-
-  await load();
-};
-function drawCashRegister(){
-  const total=state.cash.reduce((a,x)=>a+Number(x.denomination||0)*Number(x.quantity||0),0);
+  const completedCases=
+    state.cases.filter(
+      x=>x.status==='completed'
+    ).length;
 
   shell(`
+
     <div class="section">
+
       <div>
-        <h2>Cash Register</h2>
-        <div class="muted">Cash denomination & quantity</div>
-      </div>
-      <button class="primary" onclick="openCash()">+ Add Cash</button>
-    </div>
+        <h2 style="margin-bottom:4px">
+          Dashboard
+        </h2>
 
-    <div class="card stat">
-      <span class="muted">Total Cash</span>
-      <b>${money(total)}</b>
-    </div>
-
-    <div class="section">
-      <h2>Cash Details</h2>
-    </div>
-
-    <div class="list">
-      ${state.cash.map(x=>`
-        <div class="card row">
-          <div>
-            <b>${money(x.denomination)} × ${x.quantity}</b>
-            <div class="muted">
-              ${esc(x.notes||'')} • ${esc(x.register_date)}
-            </div>
-          </div>
-
-          <div style="display:flex;align-items:center;gap:10px">
-            <b>${money(Number(x.denomination||0)*Number(x.quantity||0))}</b>
-            <button onclick="editCash('${x.id}')">Edit</button>
-            <button onclick="deleteCash('${x.id}')">Delete</button>
-          </div>
+        <div class="muted">
+          તમારી ઓફિસનું ઝડપી overview
         </div>
-      `).join('') || '<div class="card empty">No cash entries yet</div>'}
+      </div>
+
+      <button
+        class="primary"
+        onclick="openClient()"
+      >
+        + New Client
+      </button>
+
     </div>
+
+
+    <div class="grid">
+
+      <div class="card stat">
+        <span class="muted">
+          Clients
+        </span>
+
+        <b>
+          ${state.clients.length}
+        </b>
+      </div>
+
+
+      <div class="card stat">
+        <span class="muted">
+          Open Cases
+        </span>
+
+        <b>
+          ${openCases}
+        </b>
+      </div>
+
+
+      <div class="card stat">
+        <span class="muted">
+          Total Amount
+        </span>
+
+        <b>
+          ${money(total)}
+        </b>
+      </div>
+
+
+      <div class="card stat">
+        <span class="muted">
+          Pending
+        </span>
+
+        <b>
+          ${money(pending)}
+        </b>
+      </div>
+
+    </div>
+
+
+    <div class="section">
+
+      <div>
+        <h2 style="margin-bottom:4px">
+          Financial Overview
+        </h2>
+
+        <div class="muted">
+          Office financial summary
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="grid">
+
+      <div class="card stat">
+
+        <span class="muted">
+          Income
+        </span>
+
+        <b>
+          ${money(income)}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Expense
+        </span>
+
+        <b>
+          ${money(expense)}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Khata Balance
+        </span>
+
+        <b>
+          ${money(khataBalance)}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Cash Balance
+        </span>
+
+        <b>
+          ${money(cash)}
+        </b>
+
+      </div>
+
+    </div>
+
+
+    <div class="section">
+
+      <div>
+        <h2 style="margin-bottom:4px">
+          Case Summary
+        </h2>
+
+        <div class="muted">
+          Current NA case status
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="grid">
+
+      <div class="card stat">
+
+        <span class="muted">
+          Total Cases
+        </span>
+
+        <b>
+          ${state.cases.length}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Open
+        </span>
+
+        <b>
+          ${openCases}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Completed
+        </span>
+
+        <b>
+          ${completedCases}
+        </b>
+
+      </div>
+
+
+      <div class="card stat">
+
+        <span class="muted">
+          Received
+        </span>
+
+        <b>
+          ${money(received)}
+        </b>
+
+      </div>
+
+    </div>
+
+
+    <div class="section">
+
+      <div>
+        <h2 style="margin-bottom:4px">
+          Recent Cases
+        </h2>
+
+        <div class="muted">
+          Latest NA cases
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="list">
+
+      ${
+        state.cases
+          .slice(0,5)
+          .map(caseRow)
+          .join('')
+
+        ||
+
+        '<div class="card empty">No cases yet</div>'
+      }
+
+    </div>
+
   `);
 }
-window.editCash=async(id)=>{
-  const x=state.cash.find(a=>a.id===id);
-  if(!x)return;
-
-  modal('Edit Cash Entry',`
-    <div class="formgrid">
-      <div class="field">
-        <label>Denomination</label>
-        <input id="f_denom" type="number" min="1" value="${x.denomination}">
-      </div>
-
-      <div class="field">
-        <label>Quantity</label>
-        <input id="f_qty" type="number" min="0" value="${x.quantity}">
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Date</label>
-      <input id="f_cdate" type="date" value="${x.register_date}">
-    </div>
-
-    <div class="field">
-      <label>Notes</label>
-      <input id="f_cnotes" value="${esc(x.notes||'')}">
-    </div>
-  `,async()=>{
-    const denomination=Number(f_denom.value||0);
-    const quantity=Number(f_qty.value||0);
-
-    if(denomination<=0)return alert('Denomination required');
-    if(quantity<0)return alert('Quantity cannot be negative');
-
-    const r=await sb.from('cash_register').update({
-      denomination:denomination,
-      quantity:quantity,
-      register_date:f_cdate.value,
-      notes:f_cnotes.value.trim()||null
-    }).eq('id',id);
-
-    if(r.error)return alert(r.error.message);
-
-    modal.remove();
-    await load();
-  });
-};
-
-window.deleteCash=async(id)=>{
-  if(!confirm('Delete this Cash entry?'))return;
-
-  const r=await sb.from('cash_register').delete().eq('id',id);
-
-  if(r.error)return alert(r.error.message);
-
-  await load();
-};
-function modal(title,body,save){root.insertAdjacentHTML('beforeend',`<div class="modal" id="modal"><div class="modalbox"><h2>${title}</h2>${body}<div class="actions"><button class="secondary" onclick="modal.remove()">Cancel</button><button class="primary" id="saveBtn">Save</button></div></div></div>`);saveBtn.onclick=save}
-window.openClient=async(id)=>{const c=state.clients.find(x=>x.id===id)||{};modal(id?'Edit Client':'New Client',`<div class="field"><label>Name</label><input id="f_name" value="${esc(c.name||'')}"></div><div class="formgrid"><div class="field"><label>Phone</label><input id="f_phone" value="${esc(c.phone||'')}"></div><div class="field"><label>Email</label><input id="f_email" value="${esc(c.email||'')}"></div></div><div class="field"><label>Address</label><textarea id="f_address">${esc(c.address||'')}</textarea></div>`,async()=>{const payload={name:f_name.value.trim(),phone:f_phone.value.trim()||null,email:f_email.value.trim()||null,address:f_address.value.trim()||null};if(!payload.name)return alert('Name required');const r=id?await sb.from('clients').update(payload).eq('id',id):await sb.from('clients').insert(payload);if(r.error)return alert(r.error.message);modal.remove();await load()})}
-window.openCase=()=>{modal('New NA Case',`<div class="field"><label>Client</label><select id="f_client">${state.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>Title</label><input id="f_title" placeholder="NA / Revenue work"></div><div class="formgrid"><div class="field"><label>Case Type</label><input id="f_type" placeholder="NA"></div><div class="field"><label>Status</label><select id="f_status"><option>open</option><option>pending</option><option>completed</option><option>cancelled</option></select></div></div><div class="formgrid"><div class="field"><label>Total Amount</label><input id="f_total" type="number" min="0" value="0"></div><div class="field"><label>Received Amount</label><input id="f_received" type="number" min="0" value="0"></div></div><div class="field"><label>Due Date</label><input id="f_due" type="date"></div>`,async()=>{if(!f_client.value)return alert('Add a client first');const r=await sb.from('cases').insert({client_id:f_client.value,title:f_title.value.trim(),case_type:f_type.value.trim()||null,status:f_status.value,total_amount:Number(f_total.value||0),received_amount:Number(f_received.value||0),due_date:f_due.value||null});if(r.error)return alert(r.error.message);modal.remove();await load()})}
-
-window.openKhata=()=>{
-  modal('New Khata Entry',`
-    <div class="field">
-      <label>Party Name</label>
-      <input id="f_party" placeholder="Party name">
-    </div>
-    <div class="formgrid">
-      <div class="field">
-        <label>Type</label>
-        <select id="f_etype">
-          <option value="credit">Credit</option>
-          <option value="debit">Debit</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Amount</label>
-        <input id="f_kamount" type="number" min="1">
-      </div>
-    </div>
-    <div class="field">
-      <label>Date</label>
-      <input id="f_kdate" type="date" value="${new Date().toISOString().slice(0,10)}">
-    </div>
-    <div class="field">
-      <label>Description</label>
-      <input id="f_kdesc">
-    </div>
-  `,async()=>{
-    const amount=Number(f_kamount.value||0);
-    if(!f_party.value.trim())return alert('Party name required');
-    if(amount<=0)return alert('Amount must be greater than 0');
-
-    const r=await sb.from('khata_entries').insert({
-      party_name:f_party.value.trim(),
-      entry_type:f_etype.value,
-      amount:amount,
-      description:f_kdesc.value.trim()||null,
-      entry_date:f_kdate.value
-    });
-
-    if(r.error)return alert(r.error.message);
-    modal.remove();
-    await load();
-  });
-}
-window.openCash=()=>{
-  modal('New Cash Entry',`
-    <div class="formgrid">
-      <div class="field">
-        <label>Denomination</label>
-        <input id="f_denom" type="number" min="1" placeholder="500">
-      </div>
-      <div class="field">
-        <label>Quantity</label>
-        <input id="f_qty" type="number" min="0" value="1">
-      </div>
-    </div>
-    <div class="field">
-      <label>Date</label>
-      <input id="f_cdate" type="date" value="${new Date().toISOString().slice(0,10)}">
-    </div>
-    <div class="field">
-      <label>Notes</label>
-      <input id="f_cnotes" placeholder="Optional">
-    </div>
-  `,async()=>{
-    const denomination=Number(f_denom.value||0);
-    const quantity=Number(f_qty.value||0);
-
-    if(denomination<=0)return alert('Denomination required');
-    if(quantity<0)return alert('Quantity cannot be negative');
-
-    const r=await sb.from('cash_register').insert({
-      denomination:denomination,
-      quantity:quantity,
-      register_date:f_cdate.value,
-      notes:f_cnotes.value.trim()||null
-    });
-
-    if(r.error)return alert(r.error.message);
-    modal.remove();
-    await load();
-  });
-}
-sb.auth.onAuthStateChange(async(_event,session)=>{state.user=session?.user||null;if(state.user)await load();else renderLogin()});
-(async()=>{const {data}=await sb.auth.getSession();if(data.session){state.user=data.session.user;await load()}else renderLogin()})();
-</script></body></html>
